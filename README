@@ -1,33 +1,66 @@
-# DeFi Wallet Scoring
+DeFi Wallet Scoring
+Welcome! 👋
+This project is all about understanding DeFi wallet behavior. We simulate and analyze thousands of wallet transactions, assign each wallet a score, and explain what makes a wallet “good” or “risky.” If you’re curious about DeFi analytics, wallet health, or just want to see some cool data science in action, you’re in the right place!
 
-This project analyzes and scores DeFi wallet behaviors using synthetic transaction data.  
-It demonstrates feature engineering, wallet scoring, and analysis using Node.js.
+🚀 What does this project do?
+Generates synthetic DeFi transactions (so you can play with realistic data, no blockchain needed!)
 
-## Features
+Extracts behavioral features from each wallet, like how often they repay, how many assets they use, and how volatile their activity is.
 
-- **Synthetic Data Generation:** Simulates realistic DeFi transactions across multiple assets and actions.
-- **Feature Engineering:** Extracts behavioral metrics such as repayment consistency, collateral ratio, activity duration, and more.
-- **Wallet Scoring:** Assigns a score to each wallet based on weighted behavioral features.
-- **Analysis:** Outputs top and bottom performing wallets with explanations of their strengths and weaknesses.
+Scores every wallet using a transparent, weighted system.
 
-## How It Works
+Analyzes the best and worst wallets, showing what makes them stand out.
 
-1. **Synthetic Data Generation:**  
-   The script generates 100,000 synthetic transactions for 500 wallets, covering actions like deposit, borrow, repay, withdraw, and liquidation.
+🛠️ How does it work?
+Synthetic Data Generation:
+The script creates 100,000 fake DeFi transactions for 500 wallets. Each wallet does things like deposit, borrow, repay, withdraw, and sometimes gets liquidated-just like in real DeFi protocols.
 
-2. **Feature Engineering:**  
-   For each wallet, the script computes features such as:
-   - Transaction count and frequency
-   - Unique assets interacted with
-   - Collateral and repayment ratios
-   - Liquidation frequency
-   - Behavior volatility and flash loan-like patterns
+Feature Engineering:
+For each wallet, we measure things like:
 
-3. **Scoring:**  
-   Each behavioral feature is normalized and weighted. The script computes a final score (0-100) for each wallet.
+How many transactions they make
 
-4. **Analysis:**  
-   The top and bottom wallets are analyzed, highlighting key strengths and issues for each.
+How many different assets they use
 
-## Folder Structure
+Their average collateral and repayment ratios
 
+How often they get liquidated
+
+How “spiky” or “smooth” their activity is (volatility)
+
+Whether they behave like flash loan attackers
+
+Scoring:
+We normalize all these features and combine them using a set of weights (see the code for details). Each wallet ends up with a score between 0 and 100.
+
+Analysis:
+The script prints out the top and bottom wallets, with a plain-English summary of their strengths and weaknesses.
+
+📁 Folder Structure
+text
+wallet-score-project/
+├── src/
+│   └── walletScoring.js   # Main code (from paste.txt or paste-2.txt)
+├── README.md
+▶️ How to run it
+Clone or download this repository.
+
+Install dependencies if you use CSV features (optional):
+
+text
+npm install csv-parse
+Run the script:
+
+text
+node src/walletScoring.js
+Check your console for the results!
+
+🤔 Why would I use this?
+To learn about DeFi wallet behavior and risk
+
+To test wallet scoring models before using real blockchain data
+
+To build your own DeFi analytics or wallet health dashboard
+
+📜 License
+MIT - free to use, share, and build on!
