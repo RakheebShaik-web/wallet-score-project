@@ -1,0 +1,356 @@
+import fs from 'fs/promises';
+import path from 'path';
+import { parse } from 'csv-parse';
+
+// Core configuration
+const MIN_SCORE = 0;
+const MAX_SCORE = 100;
+const TOP_WALLETS = 1000;
+
+// Behavior weights for scoring
+const WEIGHTS = {
+  consistent_repayment: 15,
+  long_term_deposits: 15,
+  healthy_collateral_ratio: 20,
+  regular_activity: 10,
+  diverse_assets: 10,
+  liquidation_frequency: -25,
+  erratic_behavior: -15,
+  flash_loan_like: -20,
+  extreme_leverage: -15,
+  protocol_stress: -10
+};
+
+async function scoreWallets() {
+  console.log("Starting wallet scoring process...");
+  
+  const transactions = await loadTransactionData();
+  console.log(`Loaded ${transactions.length} transactions`);
+  
+  const walletData = processTransactionsByWallet(transactions);
+  console.log(`Processed data for ${Object.keys(walletData).length} unique wallets`);
+  
+  const walletFeatures = engineerWalletFeatures(walletData);
+  const walletScores = scoreWalletsBasedOnFeatures(walletFeatures);
+  
+  outputResults(walletScores);
+  analyzeWallets(walletScores, walletFeatures);
+}
+
+async function loadTransactionData() {
+  console.log("Generating synthetic transaction data for demonstration...");
+  
+  const syntheticData = [];
+  const actions = ['deposit', 'borrow', 'repay', 'withdraw', 'liquidation'];
+  const assets = ['USDC', 'ETH', 'DAI', 'WBTC', 'COMP'];
+  const walletCount = 500;
+  
+  for (let i = 0; i < 100000; i++) {
+    const walletId = `0x${Math.floor(Math.random() * walletCount).toString(16).padStart(40, '0')}`;
+    const timestamp = new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString();
+    const action = actions[Math.floor(Math.random() * actions.length)];
+    const asset = assets[Math.floor(Math.random() * assets.length)];
+    const amount = Math.random() * 1000000;
+    
+    syntheticData.push({ wallet: walletId, timestamp, action, asset, amount });
+  }
+  
+  return syntheticData;
+}
+
+function processTransactionsByWallet(transactions) {
+  const walletData = {};
+  
+  for (const tx of transactions) {
+    if (!walletData[tx.wallet]) {
+      walletData[tx.wallet] = {
+        transactions: [],
+        assets: new Set(),
+        totalDeposited: 0,
+        totalBorrowed: 0,
+        totalRepaid: 0,
+        totalWithdrawn: 0,
+        liquidationCount: 0,
+        firstActivity: new Date(tx.timestamp),
+        lastActivity: new Date(tx.timestamp)
+      };
+    }
+    
+    const wallet = walletData[tx.wallet];
+    wallet.transactions.push(tx);
+    wallet.assets.add(tx.asset);
+    
+    switch (tx.action) {
+      case 'deposit': wallet.totalDeposited += tx.amount; break;
+      case 'borrow': wallet.totalBorrowed += tx.amount; break;
+      case 'repay': wallet.totalRepaid += tx.amount; break;
+      case 'withdraw': wallet.totalWithdrawn += tx.amount; break;
+      case 'liquidation': wallet.liquidationCount += 1; break;
+    }
+    
+    const txDate = new Date(tx.timestamp);
+    if (txDate < wallet.firstActivity) wallet.firstActivity = txDate;
+    if (txDate > wallet.lastActivity) wallet.lastActivity = txDate;
+  }
+  
+  for (const wallet of Object.values(walletData)) {
+    wallet.transactions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    wallet.activityDuration = (wallet.lastActivity - wallet.firstActivity) / (1000 * 60 * 60 * 24);
+  }
+  
+  return walletData;
+}
+
+function engineerWalletFeatures(walletData) {
+  const walletFeatures = {};
+  
+  for (const [address, wallet] of Object.entries(walletData)) {
+    if (wallet.transactions.length < 5) continue;
+    
+    const totalAmount = wallet.transactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const avgTxSize = totalAmount / wallet.transactions.length;
+    
+    walletFeatures[address] = {
+      address,
+      transactionCount: wallet.transactions.length,
+      uniqueAssetCount: wallet.assets.size,
+      activityDuration: wallet.activityDuration,
+      liquidationRatio: wallet.liquidationCount / wallet.transactions.length,
+      repaymentRatio: wallet.totalRepaid / Math.max(wallet.totalBorrowed, 1),
+      collateralRatio: wallet.totalDeposited / Math.max(wallet.totalBorrowed, 1),
+      withdrawalRatio: wallet.totalWithdrawn / Math.max(wallet.totalDeposited, 1),
+      averageTransactionSize: avgTxSize,
+      transactionFrequency: wallet.transactions.length / Math.max(wallet.activityDuration, 1),
+      behaviorVolatility: calculateBehaviorVolatility(wallet),
+      flashLoanLikeBehavior: detectFlashLoanLikeBehavior(wallet),
+      consistentRepayment: calculateConsistentRepayment(wallet),
+      leverageRatio: wallet.totalBorrowed / Math.max(wallet.totalDeposited, 1)
+    };
+  }
+  
+  return walletFeatures;
+}
+
+function calculateBehaviorVolatility(wallet) {
+  if (wallet.transactions.length < 3) return 0;
+  
+  const timeDiffs = [];
+  for (let i = 1; i < wallet.transactions.length; i++) {
+    const prevTime = new Date(wallet.transactions[i-1].timestamp).getTime();
+    const currTime = new Date(wallet.transactions[i].timestamp).getTime();
+    timeDiffs.push((currTime - prevTime) / (1000 * 60 * 60));
+  }
+  
+  const mean = timeDiffs.reduce((sum, val) => sum + val, 0) / timeDiffs.length;
+  const variance = timeDiffs.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / timeDiffs.length;
+  
+  return Math.sqrt(variance) / mean;
+}
+
+function detectFlashLoanLikeBehavior(wallet) {
+  let flashLoanLikeCount = 0;
+  const THRESHOLD_HOURS = 1;
+  
+  for (let i = 0; i < wallet.transactions.length - 1; i++) {
+    if (wallet.transactions[i].action === 'borrow') {
+      for (let j = i + 1; j < wallet.transactions.length; j++) {
+        const timeDiff = (new Date(wallet.transactions[j].timestamp) - new Date(wallet.transactions[i].timestamp)) / (1000 * 60 * 60);
+        
+        if (timeDiff > THRESHOLD_HOURS) break;
+        
+        if (wallet.transactions[j].action === 'repay' && 
+            wallet.transactions[j].asset === wallet.transactions[i].asset &&
+            Math.abs(wallet.transactions[j].amount - wallet.transactions[i].amount) / wallet.transactions[i].amount < 0.1) {
+          flashLoanLikeCount++;
+          break;
+        }
+      }
+    }
+  }
+  
+  return flashLoanLikeCount / Math.max(wallet.transactions.length, 1);
+}
+
+function calculateConsistentRepayment(wallet) {
+  if (wallet.totalBorrowed === 0) return 1;
+  
+  let borrowEvents = 0;
+  let repaidBorrows = 0;
+  let currentBorrows = new Map();
+  
+  for (const tx of wallet.transactions) {
+    if (tx.action === 'borrow') {
+      borrowEvents++;
+      const currentAmount = currentBorrows.get(tx.asset) || 0;
+      currentBorrows.set(tx.asset, currentAmount + tx.amount);
+    } else if (tx.action === 'repay') {
+      const currentAmount = currentBorrows.get(tx.asset) || 0;
+      if (currentAmount > 0) {
+        const newAmount = Math.max(0, currentAmount - tx.amount);
+        currentBorrows.set(tx.asset, newAmount);
+        if (newAmount === 0) repaidBorrows++;
+      }
+    }
+  }
+  
+  const totalRemaining = Array.from(currentBorrows.values()).reduce((sum, val) => sum + val, 0);
+  return (repaidBorrows / Math.max(borrowEvents, 1)) * (1 - (totalRemaining / Math.max(wallet.totalBorrowed, 1)));
+}
+
+function scoreWalletsBasedOnFeatures(walletFeatures) {
+  const walletScores = {};
+  const featureStats = calculateFeatureStats(walletFeatures);
+  
+  for (const [address, features] of Object.entries(walletFeatures)) {
+    const behaviorScores = {
+      consistent_repayment: normalizeAndScore(features.consistentRepayment, featureStats.consistentRepayment, true),
+      long_term_deposits: normalizeAndScore(features.activityDuration, featureStats.activityDuration, true),
+      healthy_collateral_ratio: scoreCollateralRatio(features.collateralRatio),
+      regular_activity: normalizeAndScore(1 - features.behaviorVolatility, featureStats.behaviorVolatility, false),
+      diverse_assets: normalizeAndScore(features.uniqueAssetCount, featureStats.uniqueAssetCount, true),
+      liquidation_frequency: normalizeAndScore(features.liquidationRatio, featureStats.liquidationRatio, false),
+      erratic_behavior: normalizeAndScore(features.behaviorVolatility, featureStats.behaviorVolatility, false),
+      flash_loan_like: normalizeAndScore(features.flashLoanLikeBehavior, featureStats.flashLoanLikeBehavior, false),
+      extreme_leverage: normalizeAndScore(Math.max(0, features.leverageRatio - 0.8), featureStats.leverageRatio, false),
+      protocol_stress: calculateProtocolStressScore(features)
+    };
+    
+    let weightedScore = 0;
+    let totalWeight = 0;
+    
+    for (const [behavior, weight] of Object.entries(WEIGHTS)) {
+      weightedScore += behaviorScores[behavior] * weight;
+      totalWeight += Math.abs(weight);
+    }
+    
+    const normalizedScore = ((weightedScore / totalWeight) + 1) / 2 * 100;
+    const finalScore = Math.max(MIN_SCORE, Math.min(MAX_SCORE, Math.round(normalizedScore)));
+    
+    walletScores[address] = { score: finalScore, behaviorScores };
+  }
+  
+  return walletScores;
+}
+
+function calculateFeatureStats(walletFeatures) {
+  const stats = {
+    consistentRepayment: { min: 1, max: 0 },
+    activityDuration: { min: Infinity, max: 0 },
+    behaviorVolatility: { min: Infinity, max: 0 },
+    uniqueAssetCount: { min: Infinity, max: 0 },
+    liquidationRatio: { min: Infinity, max: 0 },
+    flashLoanLikeBehavior: { min: Infinity, max: 0 },
+    leverageRatio: { min: Infinity, max: 0 }
+  };
+  
+  for (const features of Object.values(walletFeatures)) {
+    for (const key of Object.keys(stats)) {
+      if (features[key] < stats[key].min) stats[key].min = features[key];
+      if (features[key] > stats[key].max) stats[key].max = features[key];
+    }
+  }
+  
+  return stats;
+}
+
+function normalizeAndScore(value, stats, isPositive) {
+  const range = stats.max - stats.min;
+  const normalized = range === 0 ? 0.5 : (value - stats.min) / range;
+  return isPositive ? (normalized * 2 - 1) : (1 - normalized * 2);
+}
+
+function scoreCollateralRatio(ratio) {
+  if (ratio < 1.0) return -1;
+  if (ratio > 5.0) return 0;
+  if (ratio >= 2.0 && ratio <= 3.0) return 1;
+  
+  if (ratio > 1.0 && ratio < 2.0) {
+    return -1 + (ratio - 1.0) * 2;
+  } else {
+    return 1 - (ratio - 3.0) / 2;
+  }
+}
+
+function calculateProtocolStressScore(features) {
+  const stressFactors = [
+    features.flashLoanLikeBehavior > 0.2 ? 0.5 : 0,
+    features.behaviorVolatility > 2.0 ? 0.3 : 0,
+    features.leverageRatio > 0.9 ? 0.4 : 0,
+    features.transactionFrequency > 10 && features.averageTransactionSize > 100000 ? 0.6 : 0
+  ];
+  
+  return Math.min(1, stressFactors.reduce((sum, val) => sum + val, 0));
+}
+
+function outputResults(walletScores) {
+  const sortedWallets = Object.entries(walletScores)
+    .sort((a, b) => b[1].score - a[1].score)
+    .slice(0, TOP_WALLETS);
+  
+  console.log("\n=== TOP WALLET SCORES ===");
+  console.log("Address\t\t\t\t\t\tScore");
+  console.log("-----------------------------------------------");
+  
+  for (let i = 0; i < Math.min(10, sortedWallets.length); i++) {
+    const [address, data] = sortedWallets[i];
+    console.log(`${address}\t${data.score}`);
+  }
+  
+  console.log(`\n... and ${sortedWallets.length - 10} more wallets`);
+  console.log("\nIn a real implementation, the full list would be written to a CSV file.");
+}
+
+function analyzeWallets(walletScores, walletFeatures) {
+  const sortedWallets = Object.entries(walletScores)
+    .sort((a, b) => b[1].score - a[1].score);
+  
+  const topWallets = sortedWallets.slice(0, 5);
+  const bottomWallets = sortedWallets.slice(-5).reverse();
+  
+  console.log("\n=== WALLET ANALYSIS ===");
+  
+  console.log("\n--- TOP 5 WALLETS ---");
+  for (const [address, data] of topWallets) {
+    const features = walletFeatures[address];
+    console.log(`\nWallet: ${address} (Score: ${data.score})`);
+    console.log(`Transactions: ${features.transactionCount}, Assets: ${features.uniqueAssetCount}, Duration: ${Math.round(features.activityDuration)} days`);
+    console.log(`Collateral Ratio: ${features.collateralRatio.toFixed(2)}, Repayment Ratio: ${features.repaymentRatio.toFixed(2)}`);
+    
+    console.log("Key Strengths:");
+    const strengths = Object.entries(data.behaviorScores)
+      .filter(([behavior, score]) => WEIGHTS[behavior] > 0 && score > 0.5)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+    
+    for (const [behavior, score] of strengths) {
+      console.log(`- ${formatBehaviorName(behavior)}: ${(score * 100).toFixed(1)}%`);
+    }
+  }
+  
+  console.log("\n--- BOTTOM 5 WALLETS ---");
+  for (const [address, data] of bottomWallets) {
+    const features = walletFeatures[address];
+    console.log(`\nWallet: ${address} (Score: ${data.score})`);
+    console.log(`Transactions: ${features.transactionCount}, Assets: ${features.uniqueAssetCount}, Duration: ${Math.round(features.activityDuration)} days`);
+    console.log(`Collateral Ratio: ${features.collateralRatio.toFixed(2)}, Repayment Ratio: ${features.repaymentRatio.toFixed(2)}`);
+    
+    console.log("Key Issues:");
+    const issues = Object.entries(data.behaviorScores)
+      .filter(([behavior, score]) => WEIGHTS[behavior] < 0 && score < -0.5)
+      .sort((a, b) => a[1] - b[1])
+      .slice(0, 3);
+    
+    for (const [behavior, score] of issues) {
+      console.log(`- ${formatBehaviorName(behavior)}: ${(Math.abs(score) * 100).toFixed(1)}%`);
+    }
+  }
+}
+
+function formatBehaviorName(behavior) {
+  return behavior
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+scoreWallets().catch(console.error);
