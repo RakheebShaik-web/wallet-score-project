@@ -1,0 +1,33 @@
+# DeFi Wallet Scoring
+
+This project analyzes and scores DeFi wallet behaviors using synthetic transaction data.  
+It demonstrates feature engineering, wallet scoring, and analysis using Node.js.
+
+## Features
+
+- **Synthetic Data Generation:** Simulates realistic DeFi transactions across multiple assets and actions.
+- **Feature Engineering:** Extracts behavioral metrics such as repayment consistency, collateral ratio, activity duration, and more.
+- **Wallet Scoring:** Assigns a score to each wallet based on weighted behavioral features.
+- **Analysis:** Outputs top and bottom performing wallets with explanations of their strengths and weaknesses.
+
+## How It Works
+
+1. **Synthetic Data Generation:**  
+   The script generates 100,000 synthetic transactions for 500 wallets, covering actions like deposit, borrow, repay, withdraw, and liquidation.
+
+2. **Feature Engineering:**  
+   For each wallet, the script computes features such as:
+   - Transaction count and frequency
+   - Unique assets interacted with
+   - Collateral and repayment ratios
+   - Liquidation frequency
+   - Behavior volatility and flash loan-like patterns
+
+3. **Scoring:**  
+   Each behavioral feature is normalized and weighted. The script computes a final score (0-100) for each wallet.
+
+4. **Analysis:**  
+   The top and bottom wallets are analyzed, highlighting key strengths and issues for each.
+
+## Folder Structure
+
